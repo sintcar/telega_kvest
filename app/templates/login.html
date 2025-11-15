@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Вход в админку</title>
+    <style>
+        body { font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; background: #f3f4f6; }
+        .card { background: white; padding: 24px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); width: 320px; }
+        input[type="password"] { width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #d1d5db; margin-top: 6px; }
+        label { font-size: 14px; color: #374151; }
+        .btn { margin-top: 12px; width: 100%; padding: 8px 10px; border-radius: 8px; border: none; background: #2563eb; color: white; cursor: pointer; font-size: 14px; }
+        .error { color: #b91c1c; margin-top: 10px; font-size: 13px; }
+        h1 { margin: 0 0 16px 0; font-size: 20px; text-align: center; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h1>Вход в админку</h1>
+    <form method="post">
+        <label>Пароль
+            <input type="password" name="password" required>
+        </label>
+        <button class="btn" type="submit">Войти</button>
+        {% if error %}
+            <div class="error">{{ error }}</div>
+        {% endif %}
+    </form>
+</div>
+</body>
+</html>

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Пользователи</h1>
+<table>
+    <tr>
+        <th>ID</th>
+        <th>Telegram ID</th>
+        <th>Username</th>
+        <th>Имя</th>
+        <th>Фамилия</th>
+        <th>Когда присоединился</th>
+    </tr>
+    {% for u in users %}
+    <tr>
+        <td>{{ u.id }}</td>
+        <td>{{ u.telegram_id }}</td>
+        <td>@{{ u.username if u.username else "" }}</td>
+        <td>{{ u.first_name or "" }}</td>
+        <td>{{ u.last_name or "" }}</td>
+        <td>{{ u.joined_at }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}

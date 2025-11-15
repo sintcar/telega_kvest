@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display:flex; justify-content: space-between; align-items: center;">
+    <h1>Вопросы</h1>
+    <a href="/questions/new" class="btn">+ Новый вопрос</a>
+</div>
+
+<table>
+    <tr>
+        <th>ID</th>
+        <th>Текст</th>
+        <th>Запланирован</th>
+        <th>Опубликован</th>
+        <th>Активен</th>
+        <th></th>
+    </tr>
+    {% for q in questions %}
+    <tr>
+        <td>{{ q.id }}</td>
+        <td>{{ q.text[:80] }}{% if q.text|length > 80 %}...{% endif %}</td>
+        <td>{{ q.scheduled_at if q.scheduled_at else "-" }}</td>
+        <td>{{ q.posted_at if q.posted_at else "-" }}</td>
+        <td>{{ "Да" if q.is_active else "Нет" }}</td>
+        <td>
+            <a href="/questions/{{ q.id }}" class="btn btn-secondary">Редактировать</a>
+            <form method="post" action="/questions/{{ q.id }}/delete" style="display:inline;" onsubmit="return confirm('Удалить вопрос?');">
+                <button class="btn btn-danger" type="submit">Удалить</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}

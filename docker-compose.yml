@@ -1,0 +1,52 @@
+version: '3.9'
+
+services:
+  bot:
+    build: .
+    container_name: quest_bot
+    command: python run_bot.py
+    restart: always
+    volumes:
+      - .:/app
+      - ./uploads:/app/uploads
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Novosibirsk
+    depends_on:
+      - db
+
+  admin:
+    build: .
+    container_name: quest_admin
+    command: python run_admin.py
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - ./uploads:/app/uploads
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Novosibirsk
+    depends_on:
+      - db
+
+  db:
+    image: mysql:8.0
+    container_name: quest_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: db3
+      MYSQL_USER: db3
+      MYSQL_PASSWORD: YraF2015
+      TZ: Asia/Novosibirsk
+    ports:
+      - "3336:3336"
+    volumes:
+      - quest_mysql_data:/var/lib/mysql
+
+volumes:
+  quest_mysql_data:

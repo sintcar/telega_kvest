@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>🏆 Рейтинг игроков</h1>
+
+{% if not rating %}
+<p>Рейтинг пока пуст 🤷‍♂️</p>
+{% else %}
+<table border="1" cellpadding="6" cellspacing="0" style="border-collapse: collapse; width: 100%;">
+    <thead style="background-color: #f0f0f0;">
+        <tr>
+            <th>#</th>
+            <th>Игрок</th>
+            <th>Username</th>
+            <th>Очки</th>
+            <th>✅ Правильных</th>
+            <th>❌ Ошибок</th>
+            <th>⏱ Среднее время (сек)</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in rating %}
+        <tr>
+            <td style="text-align:center;">{{ loop.index }}</td>
+            <td>{{ row.first_name or '' }}</td>
+            <td>
+                {% if row.username %}
+                    @{{ row.username }}
+                {% else %}
+                    {{ row.telegram_id }}
+                {% endif %}
+            </td>
+            <td style="text-align:right;">{{ "%.1f"|format(row.score) }}</td>
+            <td style="text-align:center;">{{ row.correct }}</td>
+            <td style="text-align:center;">{{ row.wrong }}</td>
+            <td style="text-align:center;">{{ "%.1f"|format(row.avg_time or 0) }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+<a href="/" class="btn" style="margin-top:20px; display:inline-block;">← Назад</a>
+{% endblock %}

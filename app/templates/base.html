@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Quest Bot Admin</title>
+    <style>
+        body { font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; background: #f5f5f7; }
+        header { background: #111827; color: white; padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; }
+        header a { color: #e5e7eb; margin-left: 15px; text-decoration: none; }
+        header a:hover { color: white; }
+        main { max-width: 900px; margin: 20px auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+        .btn { padding: 6px 12px; border-radius: 8px; border: none; background: #2563eb; color: white; cursor: pointer; text-decoration: none; font-size: 14px; }
+        .btn-secondary { background: #6b7280; }
+        .btn-danger { background: #dc2626; }
+        .btn + .btn { margin-left: 8px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; text-align: left; font-size: 14px; vertical-align: top; }
+        th { background: #f9fafb; }
+        input[type="text"], textarea, input[type="datetime-local"], input[type="number"] {
+            width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid #d1d5db; font-size: 14px;
+        }
+        label { font-size: 14px; display: block; margin-top: 10px; margin-bottom: 4px; color: #374151; }
+        .field-group { margin-bottom: 10px; }
+        .error { color: #dc2626; margin-top: 10px; }
+    </style>
+</head>
+<body>
+<header>
+    <div><strong>Quest Bot Admin</strong></div>
+    <nav>
+        <a href="/">Главная</a>
+        <a href="/questions">Вопросы</a>
+        <a href="/users">Пользователи</a>
+        <a href="/rating">Рейтинг</a>
+        <a href="/logout">Выход</a>
+    </nav>
+</header>
+<main>
+    {% block content %}{% endblock %}
+</main>
+</body>
+</html>

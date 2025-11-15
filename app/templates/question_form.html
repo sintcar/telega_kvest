@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{% if question %}Редактирование вопроса #{{ question.id }}{% else %}Новый вопрос{% endif %}</h1>
+
+<form method="post" enctype="multipart/form-data">
+    <div class="field-group">
+        <label>Текст вопроса</label>
+        <textarea name="text" rows="4" required>{{ question.text if question else "" }}</textarea>
+    </div>
+
+    <div class="field-group">
+        <label>Картинка (опционально)</label>
+        {% if question and question.image_path %}
+            <p>Текущая картинка: 
+                <a href="/uploads/{{ question.image_path }}" target="_blank">{{ question.image_path }}</a>
+            </p>
+            <img src="/uploads/{{ question.image_path }}" alt="image"
+                 style="max-width:300px; display:block; margin:10px 0;">
+        {% endif %}
+        <input type="file" name="image">
+    </div>
+
+    <div class="field-group">
+        <label>Время публикации (локальное время сервера, формат YYYY-MM-DDTHH:MM)</label>
+        <input type="datetime-local" name="scheduled_at" value="{{ scheduled_at }}">
+    </div>
+
+    <div class="field-group">
+        <label>Chat ID группы (если пусто — возьмётся из .env)</label>
+        <input type="text" name="chat_id" value="{{ chat_id }}">
+    </div>
+
+    <div class="field-group">
+        <label>Варианты ответа</label>
+        {% for opt in options %}
+            <div style="margin-bottom:6px;">
+                <input type="radio" name="correct_option" value="{{ loop.index }}"
+                       {% if (question and correct_index == loop.index) or (not question and loop.index == 1) %}checked{% endif %}>
+                Вариант {{ loop.index }}:
+                <input type="text" name="option{{ loop.index }}" value="{{ opt }}">
+            </div>
+        {% endfor %}
+        <small>Отметьте правильный вариант (радиокнопка).</small>
+    </div>
+
+    {% if question %}
+    <div class="field-group">
+        <label>
+            <input type="checkbox" name="is_active" value="1" {% if question.is_active %}checked{% endif %}>
+            Вопрос активен (будет участвовать в логике публикации)
+        </label>
+    </div>
+    {% endif %}
+
+    <button class="btn" type="submit">Сохранить</button>
+</form>
+{% endblock %}
