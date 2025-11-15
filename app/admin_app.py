@@ -1,8 +1,9 @@
 import datetime as dt
-import os
+import secrets
+from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, Request, Form, Depends, UploadFile, File
+from fastapi import FastAPI, Request, Form, Depends, UploadFile, File, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -14,6 +15,7 @@ from .config import settings
 from .db import get_session, init_db
 from . import models
 from .handlers import calculate_rating
+from .security import verify_password
 
 app = FastAPI(title="Quest Bot Admin")
 
@@ -22,7 +24,18 @@ app.add_middleware(
 )
 
 templates = Jinja2Templates(directory="app/templates")
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+UPLOAD_DIR = Path("uploads")
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+
+ALLOWED_IMAGE_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
+MAX_UPLOAD_SIZE = 2 * 1024 * 1024  # 2 MiB
+MAX_LOGIN_ATTEMPTS = 5
+LOCKOUT_MINUTES = 5
 
 
 @app.on_event("startup")
@@ -48,9 +61,27 @@ async def login_page(request: Request):
 
 @app.post("/login", response_class=HTMLResponse)
 async def login_submit(request: Request, password: str = Form(...)):
-    if password == settings.admin_password:
+    now_ts = dt.datetime.utcnow().timestamp()
+    attempts = request.session.get("login_attempts", [])
+    attempts = [ts for ts in attempts if now_ts - ts < LOCKOUT_MINUTES * 60]
+
+    if len(attempts) >= MAX_LOGIN_ATTEMPTS:
+        return templates.TemplateResponse(
+            "login.html",
+            {
+                "request": request,
+                "error": "Слишком много попыток. Повторите позже.",
+            },
+        )
+
+    if verify_password(password, settings.admin_password_hash):
         request.session["admin"] = True
+        request.session.pop("login_attempts", None)
         return RedirectResponse(url="/", status_code=302)
+
+    attempts.append(now_ts)
+    request.session["login_attempts"] = attempts
+
     return templates.TemplateResponse(
         "login.html",
         {"request": request, "error": "Неверный пароль"},
@@ -105,6 +136,7 @@ async def questions_new(request: Request):
             "scheduled_at": "",
             "chat_id": settings.group_chat_id or "",
             "correct_index": 1,
+            "error": None,
         },
     )
 
@@ -127,15 +159,23 @@ async def questions_new_submit(
     if redirect:
         return redirect
 
-    # --- Обработка загрузки картинки ---
-    image_path = None
-    if image and image.filename:
-        os.makedirs("uploads", exist_ok=True)
-        filename = f"{int(dt.datetime.utcnow().timestamp())}_{image.filename}"
-        filepath = os.path.join("uploads", filename)
-        with open(filepath, "wb") as f:
-            f.write(await image.read())
-        image_path = filename
+    try:
+        image_path = await handle_image_upload(image)
+    except HTTPException as exc:
+        options_text = [option1, option2, option3, option4]
+        return templates.TemplateResponse(
+            "question_form.html",
+            {
+                "request": request,
+                "question": None,
+                "options": options_text,
+                "scheduled_at": scheduled_at,
+                "chat_id": chat_id,
+                "correct_index": int(correct_option),
+                "error": exc.detail,
+            },
+            status_code=exc.status_code,
+        )
 
     sched_dt: Optional[dt.datetime] = None
     if scheduled_at:
@@ -211,6 +251,7 @@ async def question_edit(
             "scheduled_at": scheduled_at,
             "chat_id": question.chat_id or settings.group_chat_id or "",
             "correct_index": correct_index,
+            "error": None,
         },
     )
 
@@ -245,14 +286,26 @@ async def question_edit_submit(
     question.text = text
     question.is_active = bool(is_active)
 
-    # --- Обработка загрузки картинки ---
-    if image and image.filename:
-        os.makedirs("uploads", exist_ok=True)
-        filename = f"{int(dt.datetime.utcnow().timestamp())}_{image.filename}"
-        filepath = os.path.join("uploads", filename)
-        with open(filepath, "wb") as f:
-            f.write(await image.read())
-        question.image_path = filename
+    try:
+        new_image = await handle_image_upload(image)
+    except HTTPException as exc:
+        options_text = [option1, option2, option3, option4]
+        return templates.TemplateResponse(
+            "question_form.html",
+            {
+                "request": request,
+                "question": question,
+                "options": options_text,
+                "scheduled_at": scheduled_at,
+                "chat_id": chat_id,
+                "correct_index": int(correct_option),
+                "error": exc.detail,
+            },
+            status_code=exc.status_code,
+        )
+
+    if new_image:
+        question.image_path = new_image
 
     sched_dt: Optional[dt.datetime] = None
     if scheduled_at:
@@ -300,16 +353,10 @@ async def users_list(request: Request, session: AsyncSession = Depends(get_sessi
     except Exception as e:
         return HTMLResponse(f"<h3>Ошибка при получении пользователей: {e}</h3>", status_code=500)
 
-    html = """
-    <h1>Пользователи</h1>
-    <a href='/'>← Назад</a><br><br>
-    <table border='1' cellpadding='5' cellspacing='0'>
-      <tr><th>ID</th><th>Имя</th><th>Username</th><th>Дата регистрации</th></tr>
-    """
-    for u in users:
-        html += f"<tr><td>{u.id}</td><td>{u.first_name or ''} {u.last_name or ''}</td><td>{u.username or ''}</td><td>{u.joined_at}</td></tr>"
-    html += "</table>"
-    return HTMLResponse(content=html)
+    return templates.TemplateResponse(
+        "users_list.html",
+        {"request": request, "users": users},
+    )
 
 
 # --- Рейтинг пользователей ---
@@ -324,36 +371,34 @@ async def rating_page(request: Request, session: AsyncSession = Depends(get_sess
     except Exception as e:
         return HTMLResponse(f"<h3>Ошибка при расчёте рейтинга: {e}</h3>", status_code=500)
 
-    html = """
-    <h1>Рейтинг пользователей</h1>
-    <a href='/'>← Назад</a><br><br>
-    <table border='1' cellpadding='5' cellspacing='0'>
-      <tr>
-        <th>#</th>
-        <th>Имя</th>
-        <th>Username</th>
-        <th>Очки</th>
-        <th>✅ Правильных</th>
-        <th>❌ Ошибок</th>
-      </tr>
-    """
-    for i, r in enumerate(rating, start=1):
-        first_name = r.get("first_name", "") or ""
-        username = r.get("username", "") or r.get("telegram_id", "")
-        score = round(r.get("score", 0), 1)
-        correct = r.get("correct", 0)
-        wrong = r.get("wrong", 0)
+    return templates.TemplateResponse(
+        "rating.html",
+        {"request": request, "rating": rating},
+    )
 
-        html += f"""
-        <tr>
-            <td>{i}</td>
-            <td>{first_name}</td>
-            <td>{username}</td>
-            <td>{score}</td>
-            <td>{correct}</td>
-            <td>{wrong}</td>
-        </tr>
-        """
 
-    html += "</table>"
-    return HTMLResponse(content=html)
+async def handle_image_upload(image: UploadFile | None) -> Optional[str]:
+    """Validate and store uploaded image files in a safe manner."""
+    if not image or not image.filename:
+        return None
+
+    content_type = (image.content_type or "").lower()
+    if content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail="Недопустимый тип файла")
+
+    data = await image.read(MAX_UPLOAD_SIZE + 1)
+    await image.close()
+
+    if len(data) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=400, detail="Файл слишком большой")
+
+    extension = ALLOWED_IMAGE_TYPES[content_type]
+    random_suffix = secrets.token_urlsafe(12)
+    filename = f"{int(dt.datetime.utcnow().timestamp())}_{random_suffix}{extension}"
+
+    UPLOAD_DIR.mkdir(exist_ok=True)
+    filepath = UPLOAD_DIR / filename
+    with open(filepath, "wb") as f:
+        f.write(data)
+
+    return filename

@@ -1,6 +1,6 @@
 import asyncio
 import datetime as dt
-import traceback
+import logging
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, FSInputFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .db import AsyncSessionLocal
 from . import models
 
+
+logger = logging.getLogger(__name__)
 
 # === ОТПРАВКА ВОПРОСА ===
 async def send_question(bot, question: models.Question, session: AsyncSession):
@@ -20,7 +22,7 @@ async def send_question(bot, question: models.Question, session: AsyncSession):
     options = options_res.scalars().all()
 
     if not options:
-        print(f"⚠️ Вопрос {question.id} не имеет вариантов ответа — пропускаем")
+        logger.warning("Skipping publication for a question without answer options")
         return
 
     # Кнопки с вариантами ответов
@@ -60,39 +62,21 @@ async def send_question(bot, question: models.Question, session: AsyncSession):
         question.message_id = msg.message_id
         await session.commit()
 
-        print(f"✅ Вопрос {question.id} отправлен в {question.chat_id}")
+        logger.info("Scheduled question dispatched successfully")
 
-    except Exception as e:
-        print(f"❌ Ошибка при отправке вопроса {question.id}: {e}")
-        print(traceback.format_exc())
+    except Exception:
+        logger.exception("Failed to dispatch scheduled question")
 
 
 # === ПЛАНИРОВЩИК ===
 async def scheduler_loop(bot):
     """Постоянно проверяет базу и отправляет новые вопросы"""
-    print("🕒 Планировщик запущен, проверка каждые 60 секунд")
+    logger.info("Scheduler started; checking for new questions every 60 seconds")
 
     while True:
         try:
             async with AsyncSessionLocal() as session:
                 now = dt.datetime.now()
-                print(f"[DEBUG] Проверка заданий: текущее ЛОКАЛЬНОЕ время {now.isoformat()}")
-
-                # Отладка: вывод всех активных вопросов
-                q_all = await session.execute(
-                    select(models.Question).where(
-                        models.Question.is_active.is_(True),
-                        models.Question.chat_id.is_not(None),
-                    )
-                )
-                all_questions = q_all.scalars().all()
-                print(f"[DEBUG] Всего активных вопросов в базе: {len(all_questions)}")
-
-                for q in all_questions:
-                    print(
-                        f"[DEBUG] ➤ ID={q.id}, scheduled_at={q.scheduled_at}, "
-                        f"posted_at={q.posted_at}, chat_id={q.chat_id}"
-                    )
 
                 # Ищем те, что пора публиковать
                 q_ready = await session.execute(
@@ -104,13 +88,13 @@ async def scheduler_loop(bot):
                     )
                 )
                 ready = q_ready.scalars().all()
-                print(f"[DEBUG] Найдено для публикации: {len(ready)}")
+                if ready:
+                    logger.info("Dispatching %d scheduled question(s)", len(ready))
 
                 for question in ready:
                     await send_question(bot, question, session)
 
-        except Exception as e:
-            print(f"⚠️ Ошибка в планировщике: {e}")
-            print(traceback.format_exc())
+        except Exception:
+            logger.exception("Unexpected error inside scheduler loop")
 
         await asyncio.sleep(60)
