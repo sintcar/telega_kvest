@@ -2,6 +2,12 @@
 {% block content %}
 <h1>{% if question %}Редактирование вопроса #{{ question.id }}{% else %}Новый вопрос{% endif %}</h1>
 
+{% if error %}
+<div class="alert alert-danger" style="background:#ffe6e6; border:1px solid #ffb3b3; padding:10px; margin-bottom:15px;">
+    {{ error }}
+</div>
+{% endif %}
+
 <form method="post" enctype="multipart/form-data">
     <div class="field-group">
         <label>Текст вопроса</label>
